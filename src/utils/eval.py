@@ -1,13 +1,16 @@
 """
 Script to handle the logic flow
 """
+import re
 from utils.llm import olama
 from pypdf import PdfReader
 from datetime import datetime
 from utils.db import schema, psqlcon, insert, update, select
-from utils.test_scenarios import pii, model_collapse
+from utils.test_scenarios import pii, model_collapse, tail_data_lose
 
 engine = psqlcon.db_connect()
+
+LIST_MARKER_PATTERN = re.compile(r'(?:^|\s)(?:[•◦‣▪*-]|\d{1,3}[.)])\s+')
 
 def update_table(table_name, PK, values):
     update.run(
@@ -17,6 +20,18 @@ def update_table(table_name, PK, values):
         values
     )
 
+def split_into_cases(text):
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    if len(lines) > 1:
+        return lines
+
+    markers = [m.strip() for m in LIST_MARKER_PATTERN.split(text) if m.strip()]
+    if len(markers) > 1:
+        return markers
+
+    text = text.strip()
+    return [text] if text else []
+
 def read_file(filename):
     if filename.endswith(".txt"):
         with open(filename, "r") as r:
@@ -24,8 +39,7 @@ def read_file(filename):
     else:
         reader = PdfReader(filename)
         for page in reader.pages:
-            page_lines = page.extract_text().split("\n")
-            return [line.strip() for line in page_lines if line.strip()]
+            return split_into_cases(page.extract_text())
 
 def write_file(new_file, content):
     with open(new_file, "w", encoding="utf-8") as w:
@@ -33,12 +47,11 @@ def write_file(new_file, content):
 
 def generate_content(filename):
     content = read_file(filename)
-    merge_content = ""
-    for con in content:
-        merge_content = merge_content + con
-    return merge_content
+    merge_content = "\n".join(line.rstrip("\n") for line in content)
+    case_count = len(content)
+    return merge_content, case_count
 
-def generate_synthetic_data(prompt, content, iteration, model, output):
+def generate_synthetic_data(prompt, content, case_count, iteration, model, output):
 
     gen_values = {
         "start_time": datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -50,7 +63,7 @@ def generate_synthetic_data(prompt, content, iteration, model, output):
         model_name = model
 
         p = prompt + "\n" + content
-        resp = olama.run(p, model)
+        resp = olama.run(p, model, case_count)
 
         iteration_values = {
             "step_count": step_count,
@@ -92,9 +105,9 @@ def run(user_input):
     schema.create_table(engine)
 
     # Parent
-    content = generate_content(user_input.filename)
+    content, case_count = generate_content(user_input.filename)
     prompt = user_input.prompt + " " + content
-    resp = olama.run(prompt, user_input.model)
+    resp = olama.run(prompt, user_input.model, case_count)
     parent_data_embed = model_collapse.embedding(content)
     base_sim = model_collapse.similarity(parent_data_embed, model_collapse.embedding(resp.content))
     print(base_sim)
@@ -102,10 +115,13 @@ def run(user_input):
     gen_id = generate_synthetic_data(
         user_input.prompt,
         resp.content,
+        case_count,
         user_input.iteration,
         user_input.model,
         user_input.output
     )
 
-    model_collapse.check_model_collapse(gen_id, base_sim, engine)
+    #model_collapse.run(gen_id, base_sim, engine)
+    #tail_data_lose.run(gen_id, engine)
+    pii.run(gen_id, engine)
             

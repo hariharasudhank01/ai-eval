@@ -1,4 +1,4 @@
-ai-eval
+ai-eval/
 output
 src/utils/__pycache__
 src/utils/db/__pycache__
@@ -6,7 +6,5 @@ src/utils/db/.env
 src/utils/llm/__pycache__
 src/utils/test_scenarios/__pycache__
 src/.env
+test/
 .DS_Store
-
-# WIP
-src/utils/test_scenarios/tail_data_lose.py
