@@ -242,4 +242,4 @@ def run(gen_id, engine):
         result["entities"] = entities
         pii.append(result)
 
-    print(pii)
+    return pii

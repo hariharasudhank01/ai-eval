@@ -1,5 +1,8 @@
 from sentence_transformers import SentenceTransformer, util
 from utils.db import select
+import dotenv
+
+dotenv.load_dotenv()
 
 model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2') # SBERT Model
 
@@ -10,6 +13,9 @@ def similarity(value1, value2):
     sim = util.cos_sim(value1, value2)
     return sim.item()
 
+def drift_pct(reference_vector, compare_vector):
+    return max(0.0, (1 - similarity(reference_vector, compare_vector))) * 100
+
 def run(gen_id, base_sim, engine):
     SessionLocal = select.initiate_sessionlocal(engine)
     iteration_details = select.fetch_iteration_id_using_gen_id(
@@ -17,36 +23,27 @@ def run(gen_id, base_sim, engine):
         gen_id
     ).all()
 
-    iteration_id = []
-    for iteration in iteration_details:
-        iteration_id.append(iteration.iteration_id)
+    iteration_id = sorted(iteration.iteration_id for iteration in iteration_details)
 
-    iteration_id.sort()
-    vector = {}
-    vector[iteration_id[0]] = select.fetch_documents_per_iteration(
-            SessionLocal,
-            iteration_id[0]
-        ).all()[0].vector_value
-    
-    for i in range(1, len(iteration_id)):
-        vector[iteration_id[i]] = select.fetch_documents_per_iteration(
-            SessionLocal,
-            iteration_id[i]
-        ).all()[0].vector_value
+    vector_list = [
+        select.fetch_documents_per_iteration(SessionLocal, iid).all()[0].vector_value
+        for iid in iteration_id
+    ]
 
-    vector_list = list(vector.values())
+    baseline_vector = vector_list[0] if vector_list else None
 
-    relative_change = []
-    sim = []
-    sim.append(base_sim)
+    collapse = []
     for i in range(1, len(vector_list)):
-        current_vector = vector_list[i]
-        previous_vector = vector_list[i - 1]
-        
-        similarity_score = similarity(current_vector, previous_vector)
-        sim.append(similarity_score)
+        results = []
+        step_similarity = similarity(vector_list[i], vector_list[i - 1])
+        baseline_drift_pct = drift_pct(baseline_vector, vector_list[i])
 
-        #relative_change.append(((similarity_score - base_sim) / base_sim))
+        results.append({
+            "iteration_id": iteration_id[i],
+            "step_similarity": step_similarity, # How similar this iteration's output is to the immediately preceding one - trending toward 1.0 signals collapse
+            "baseline_drift_pct": baseline_drift_pct, # How far this iteration has drifted from iteration 1's output, regardless of direction
+        })
+        collapse.append(results)
 
-    print(sim)
-
+    #print({"source_to_first_gen_similarity": base_sim, "iterations": results})
+    return collapse

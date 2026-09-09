@@ -121,7 +121,12 @@ def run(user_input):
         user_input.output
     )
 
-    #model_collapse.run(gen_id, base_sim, engine)
-    #tail_data_lose.run(gen_id, engine)
-    pii.run(gen_id, engine)
+    collapse_result = model_collapse.run(gen_id, base_sim, engine)
+    data_lose_result = tail_data_lose.run(gen_id, engine, user_input.output)
+    pii_result = pii.run(gen_id, engine)
+
+
+    print(f"AI Eval Results for model {user_input.model} is as follows,\n\n Generation ID {gen_id} \n\n Model Collapse {collapse_result} \n\n Data Lose {data_lose_result} \n\n PII {pii_result}")
+
+
             
