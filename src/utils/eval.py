@@ -7,7 +7,6 @@ from utils.db import schema, psqlcon, insert, update, select
 from utils.text_split import read_file
 from utils.test_scenarios import pii, model_collapse, tail_data_lose, case_split
 from utils.test_scenarios.test_results import unify_results
-from report import generate_report
 
 engine = psqlcon.db_connect()
 
@@ -123,8 +122,6 @@ def run(user_input):
             values
         )
         id.append(result_id)
-
-    generate_report(engine, gen_id)
 
 
             
