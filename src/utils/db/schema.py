@@ -45,13 +45,14 @@ class DocumentModel(Base):
 class TestResultModel(Base):
     __tablename__ = "test_results"
 
-    result_id: Mapped[int] = mapped_column(Integer, primary_key=True) #PK
+    result_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True) #PK
     test_type: Mapped[str] = mapped_column(String, nullable=False)
+    metric_name: Mapped[str] = mapped_column(String, nullable=False)
     value: Mapped[float] = mapped_column(Float, nullable=False)
 
     # FK
-    doc_id: Mapped[int] = mapped_column(Integer, ForeignKey("documents.doc_id", ondelete="CASCADE"))
     iteration_id: Mapped[int] = mapped_column(Integer, ForeignKey("iterations.iteration_id", ondelete="CASCADE"))
+    gen_id: Mapped[int] = mapped_column(Integer, ForeignKey("generations.gen_id", ondelete="CASCADE"))
 
 def verify_database(engine, tables):
     inspector = inspect(engine)

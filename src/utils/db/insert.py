@@ -1,5 +1,5 @@
 from sqlalchemy.orm import sessionmaker
-from .schema import GenerationModel, IterationModel, DocumentModel
+from .schema import GenerationModel, IterationModel, DocumentModel, TestResultModel
 import sys
 
 def insert_gen_table(SessionLocal, values):
@@ -44,6 +44,22 @@ def insert_document_table(SessionLocal, values):
         id = new_document.doc_id
         print(f"Document {id} created in db")
         session.commit()
+    return id
+
+def insert_results_table(SessionLocal, values):
+    with SessionLocal() as session:
+        new_result = TestResultModel(
+            test_type=values["test_type"],
+            metric_name=values["metric_name"],
+            value=values["value"],
+            iteration_id=values["iteration_id"],
+            gen_id=values["gen_id"]
+        )
+        session.add(new_result)
+        session.flush()
+        id = new_result.result_id
+        print(f"Result {id} stored in db")
+        session.commit()
     return id 
 
 def run(engine, table_name, values):
@@ -59,6 +75,8 @@ def run(engine, table_name, values):
         id = insert_iteration_table(SessionLocal, values)
     elif table_name == "document":
         id = insert_document_table(SessionLocal, values)
+    elif table_name == "result":
+        id = insert_results_table(SessionLocal, values)
     else:
         print(f"{table_name} not found")
         sys.exit()

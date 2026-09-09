@@ -1,5 +1,5 @@
 from sqlalchemy.orm import sessionmaker
-from .schema import GenerationModel, IterationModel, DocumentModel
+from .schema import GenerationModel, IterationModel, DocumentModel, TestResultModel
 from sqlalchemy import select
 import sys
 
@@ -26,6 +26,18 @@ def fetch_documents_per_iteration(SessionLocal, iteration_id):
             print(f"{iteration_id} not Found")
             sys.exit()
     return session.scalars(stmt)
+
+def fetch_test_results(SessionLocal, gen_id):
+    with SessionLocal() as session:
+        stmt = (
+            select(TestResultModel).where(
+                TestResultModel.gen_id == gen_id
+            )
+        )
+        if not session.scalars(stmt):
+            print(f"{gen_id} not Found")
+            sys.exit()
+    return session.scalars(stmt)       
 
 def initiate_sessionlocal(engine):
     return sessionmaker(

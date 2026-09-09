@@ -1,16 +1,15 @@
 """
 Script to handle the logic flow
 """
-import re
 from utils.llm import olama
-from pypdf import PdfReader
 from datetime import datetime
 from utils.db import schema, psqlcon, insert, update, select
-from utils.test_scenarios import pii, model_collapse, tail_data_lose
+from utils.text_split import read_file
+from utils.test_scenarios import pii, model_collapse, tail_data_lose, case_split
+from utils.test_scenarios.test_results import unify_results
+from report import generate_report
 
 engine = psqlcon.db_connect()
-
-LIST_MARKER_PATTERN = re.compile(r'(?:^|\s)(?:[•◦‣▪*-]|\d{1,3}[.)])\s+')
 
 def update_table(table_name, PK, values):
     update.run(
@@ -19,27 +18,6 @@ def update_table(table_name, PK, values):
         PK,
         values
     )
-
-def split_into_cases(text):
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
-    if len(lines) > 1:
-        return lines
-
-    markers = [m.strip() for m in LIST_MARKER_PATTERN.split(text) if m.strip()]
-    if len(markers) > 1:
-        return markers
-
-    text = text.strip()
-    return [text] if text else []
-
-def read_file(filename):
-    if filename.endswith(".txt"):
-        with open(filename, "r") as r:
-            return r.readlines()
-    else:
-        reader = PdfReader(filename)
-        for page in reader.pages:
-            return split_into_cases(page.extract_text())
 
 def write_file(new_file, content):
     with open(new_file, "w", encoding="utf-8") as w:
@@ -124,9 +102,29 @@ def run(user_input):
     collapse_result = model_collapse.run(gen_id, base_sim, engine)
     data_lose_result = tail_data_lose.run(gen_id, engine, user_input.output)
     pii_result = pii.run(gen_id, engine)
+    case_split_result = case_split.run(gen_id, engine, user_input.filename)
 
 
-    print(f"AI Eval Results for model {user_input.model} is as follows,\n\n Generation ID {gen_id} \n\n Model Collapse {collapse_result} \n\n Data Lose {data_lose_result} \n\n PII {pii_result}")
+    #print(f"AI Eval Results for model {user_input.model} is as follows,\n\n Generation ID {gen_id} \n\n Model Collapse {collapse_result} \n\n Data Lose {data_lose_result} \n\n PII {pii_result} \n\n Case Split {case_split_result}")
+
+    results = unify_results(gen_id, collapse_result, data_lose_result, pii_result, case_split_result)
+    id = []
+    for result in results:
+        values = {
+            "test_type": result["test_type"],
+            "metric_name": result["metric_name"],
+            "value": result["value"],
+            "iteration_id": result["iteration_id"],
+            "gen_id": result["gen_id"]
+        }
+        result_id = insert.run(
+            engine,
+            "result",
+            values
+        )
+        id.append(result_id)
+
+    generate_report(engine, gen_id)
 
 
             
