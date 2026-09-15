@@ -2,8 +2,13 @@
 This Script will be the entry point for this project
 """
 import argparse
-from utils import eval, validater
+from utils import eval
+from utils.helpers.logger import get_logger, timed
 import sys
+
+from utils.helpers import validater
+
+logger = get_logger("ai_eval")
 
 def argparser():
     parser = argparse.ArgumentParser(
@@ -13,8 +18,16 @@ def argparser():
     parser.add_argument(
         "-m", "--model",
         type=str,
-        help="Provide the local ollama model to be tested",
+        help="Provide the model to be tested (model name as understood by the selected provider)",
         default="llama3.2:3b"
+    )
+
+    parser.add_argument(
+        "--provider",
+        type=str,
+        choices=["ollama", "openai", "anthropic"],
+        help="Which provider hosts the model under test",
+        default="ollama"
     )
 
     parser.add_argument(
@@ -51,10 +64,18 @@ def argparser():
 def main():
     user_input = argparser()
     if not validater.validate(user_input):
+        logger.error("Input validation failed - aborting.")
         sys.exit(0)
-    eval.run(user_input)
-    
-    
+
+    try:
+        with timed(logger, "Full AI Eval run"):
+            gen_id = eval.run(user_input)
+    except Exception:
+        logger.exception("AI Eval run failed")
+        sys.exit(1)
+
+    logger.info(f"Run succeeded - gen_id={gen_id}")
+
 
 if __name__ == "__main__":
     main()

@@ -3,10 +3,17 @@ from sentence_transformers import util
 from sklearn.cluster import HDBSCAN
 from sklearn.decomposition import PCA
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")  # non-interactive, works from any thread - required when
+                        # running under a server (e.g. FastAPI runs sync code in
+                        # worker threads, where macOS's GUI backend can't be used)
 import matplotlib.pyplot as plt
-from utils.db import select
+from utils.db import select, insert
 from utils.test_scenarios import model_collapse
 import re
+from utils.helpers.logger import get_logger, timed
+
+logger = get_logger("test_scenarios.tail_data_lose")
 
 K = 3                 # upper cap on HDBSCAN min_cluster_size / min_samples
 MIN_CLUSTER_SIZE_FLOOR = 2   # smallest usable cluster size on very small runs
@@ -18,36 +25,45 @@ def adaptive_min_cluster_size(total_points, k=K):
     return max(MIN_CLUSTER_SIZE_FLOOR, min(k, total_points // 10))
 
 def run_hdbscan(embeddings, min_cluster_size):
-    db = HDBSCAN(min_cluster_size=min_cluster_size, min_samples=min_cluster_size, metric="cosine")
-    return db.fit_predict(embeddings)
+    try:
+        with timed(logger, f"HDBSCAN clustering ({len(embeddings)} points, min_cluster_size={min_cluster_size})"):
+            db = HDBSCAN(min_cluster_size=min_cluster_size, min_samples=min_cluster_size, metric="cosine")
+            return db.fit_predict(embeddings)
+    except Exception:
+        logger.exception("HDBSCAN clustering failed")
+        raise
 
 def plot_clusters_2d(embeddings, labels, save_path):
-    pca = PCA(n_components=2)
-    reduced = pca.fit_transform(embeddings)
+    try:
+        pca = PCA(n_components=2)
+        reduced = pca.fit_transform(embeddings)
 
-    plt.figure()
-    noise_mask = labels == -1
-    plt.scatter(
-        reduced[~noise_mask, 0], reduced[~noise_mask, 1],
-        c=labels[~noise_mask], cmap="tab10", marker="o", label="clustered"
-    )
-    plt.scatter(
-        reduced[noise_mask, 0], reduced[noise_mask, 1],
-        c="black", marker="x", label="noise/outlier"
-    )
-    plt.xlabel("PCA component 1")
-    plt.ylabel("PCA component 2")
-    plt.title("HDBSCAN clusters (PCA projection)")
-    plt.legend()
-    plt.savefig(save_path)
-    plt.close()
+        plt.figure()
+        noise_mask = labels == -1
+        plt.scatter(
+            reduced[~noise_mask, 0], reduced[~noise_mask, 1],
+            c=labels[~noise_mask], cmap="tab10", marker="o", label="clustered"
+        )
+        plt.scatter(
+            reduced[noise_mask, 0], reduced[noise_mask, 1],
+            c="black", marker="x", label="noise/outlier"
+        )
+        plt.xlabel("PCA component 1")
+        plt.ylabel("PCA component 2")
+        plt.title("HDBSCAN clusters (PCA projection)")
+        plt.legend()
+        plt.savefig(save_path)
+        plt.close()
+        logger.debug(f"Cluster plot saved to '{save_path}'")
+    except Exception:
+        logger.exception(f"Failed to save cluster plot to '{save_path}'")
 
 def read_file(filename):
     try:
         with open(filename, "r") as file:
             text = file.read()
-    except Exception as e:
-        print(f"Failed to Read file {filename}, {e}")
+    except Exception:
+        logger.exception(f"Failed to Read file {filename}")
         return []
 
     sentences = []
@@ -77,6 +93,7 @@ def diversity_loss_pct(reference_embeddings, compare_embeddings):
     return max(0.0, (reference_spread - compare_spread) / reference_spread) * 100
 
 def run(gen_id, engine, output):
+    logger.info(f"Running tail_data_lose for gen_id {gen_id}")
 
     # Connect with DB and get the iteration details
     SessionLocal = select.initiate_sessionlocal(engine)
@@ -127,10 +144,10 @@ def run(gen_id, engine, output):
         this_embeddings = per_iteration_embeddings[idx]
         previous_embeddings = per_iteration_embeddings[idx - 1]
 
-        this_mask = all_iteration_index == idx
+        this_mask = all_iteration_index == idx # Creates a list of bool value with True on matched index
         this_labels = labels[this_mask]
         outlier_ratio_pct = (
-            (this_labels == -1).sum() / len(this_labels) * 100
+            float((this_labels == -1).sum()) / len(this_labels) * 100 # -1 refers to the noise marked by the HDBSCAN
             if len(this_labels) > 0 else 0.0
         )
 
@@ -150,4 +167,13 @@ def run(gen_id, engine, output):
         })
         data_lose.append(results)
 
+        insert.run(engine, "datalose", {
+            "cumulative_loss": cumulative_loss_pct,
+            "outlier_ratio": outlier_ratio_pct,
+            "diversity_loss_from_baseline": diversity_loss_from_baseline_pct,
+            "diversity_loss_from_previous_iteration": diversity_loss_from_previous_pct,
+            "iteration_id": iteration_id[idx],
+        })
+
+    logger.debug(f"tail_data_lose results for gen_id {gen_id}: {data_lose}")
     return data_lose

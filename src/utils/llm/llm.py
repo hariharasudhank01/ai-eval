@@ -1,9 +1,24 @@
 """
-This Script focus only on Ollama Models
+Handles calling whichever model is under test, via the provider abstraction in
+utils/llm/providers/ - Ollama, OpenAI, Anthropic today, more can be added there
+without changing anything in this file.
 """
-import ollama
 from pydantic import BaseModel
+from utils.helpers.logger import get_logger
+from utils.llm.providers import get_provider
 
+logger = get_logger("llm.olama")
+
+# Fixed, tool-owned model+provider for LLM-judge evaluation (PII, toxicity, etc.) -
+# independent of whatever provider/model the user passes in for synthetic data
+# generation, so the model under test never ends up evaluating its own output.
+# Pinned to llama3.2:3b via Ollama rather than a larger model (e.g. qwen3.5:9b)
+# because the larger model was empirically too slow/unreliable on local hardware
+# (76-489s per call, and occasional empty/invalid responses) - a fast, reliable
+# judge beats a theoretically more independent one that doesn't actually return
+# usable output. Only reconsider if this exact model+provider is the one under test.
+JUDGE_PROVIDER = "ollama"
+JUDGE_MODEL = "llama3.2:3b"
 
 SYSTEM_PROMPT = """
 Role:
@@ -43,26 +58,13 @@ class Response(BaseModel):
     def content(self) -> str:
         return "\n".join(self.items)
 
-def run(user_prompt, selected_model, case_count):
+def run(user_prompt, selected_model, case_count, provider="ollama"):
     system_prompt = SYSTEM_PROMPT.format(case_count=case_count)
 
-    response = ollama.chat(
-        model=selected_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        format=Response.model_json_schema(),
-        options={
-            'think': False,
-            'num_predict': -1
-        }
-    )
-
-    resp = Response.model_validate_json(response.message.content)
+    resp = get_provider(provider).generate(system_prompt, user_prompt, selected_model, Response)
 
     if len(resp.items) > case_count:
+        logger.debug(f"Model returned {len(resp.items)} items, truncating to requested case_count={case_count}")
         resp.items = resp.items[:case_count]
 
     return resp
-

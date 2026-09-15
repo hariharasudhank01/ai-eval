@@ -28,8 +28,73 @@ services:
     depends_on:
       - ai-eval-db-service
 
+  ai-eval-ollama:
+    container_name: ai-eval-ollama
+    image: ollama/ollama:latest
+    restart: always
+    ports:
+      - 11434:11434
+    volumes:
+      - ai-eval-ollama-volume:/root/.ollama
+    networks:
+      - ai-eval-db-network
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Uncomment to use an NVIDIA GPU on the host, if available:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # One-shot: pulls the default judge/generation model as soon as the ollama
+  # service is healthy, then exits. Re-run with `docker compose up ai-eval-ollama-init`
+  # any time you want to pull an additional model the same way.
+  ai-eval-ollama-init:
+    container_name: ai-eval-ollama-init
+    image: ollama/ollama:latest
+    environment:
+      - OLLAMA_HOST=ai-eval-ollama:11434
+    entrypoint: ["ollama", "pull", "llama3.2:3b"]
+    networks:
+      - ai-eval-db-network
+    depends_on:
+      ai-eval-ollama:
+        condition: service_healthy
+    restart: "no"
+
+  ai-eval-api:
+    container_name: ai-eval-api
+    build:
+      context: ..
+      dockerfile: src/Dockerfile
+    restart: always
+    ports:
+      - 8000:8000
+    environment:
+      # Overrides src/.env's localhost-based values - python-dotenv's load_dotenv()
+      # doesn't override real env vars by default, so these win. Reuses the same
+      # POSTGRES_USER/PASSWORD/DB already set for ai-eval-db-service above.
+      - POSTGRES_URL=postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@ai-eval-db-service:5432/${POSTGRES_DB}
+      - OLLAMA_HOST=http://ai-eval-ollama:11434
+    volumes:
+      - ../output:/app/output
+    networks:
+      - ai-eval-db-network
+    depends_on:
+      ai-eval-db-service:
+        condition: service_started
+      ai-eval-ollama:
+        condition: service_healthy
+
 networks:
   ai-eval-db-network:
 volumes:
   ai-eval-pgadmin-volume:
   ai-eval-db-volume:
+  ai-eval-ollama-volume:
