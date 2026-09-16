@@ -2,10 +2,11 @@ import os
 import altair as alt
 import pandas as pd
 import streamlit as st
+from utils.ui.theme import inject_theme
 from utils.helpers.logger import LOG_DIR
 from utils.ui.data import select_gen_id_sidebar, load_datalose, kpi_card, latest
 
-st.set_page_config(page_title="AI Eval - Tail Data", layout="wide")
+inject_theme()
 st.title("Tail Data Analysis")
 st.caption(
     "This page isn't in the original design (it was left blank there too) - built "

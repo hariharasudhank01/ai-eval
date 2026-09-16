@@ -1,6 +1,7 @@
 import altair as alt
 import pandas as pd
 import streamlit as st
+from utils.ui.theme import inject_theme
 from utils.ui.data import (
     select_gen_id_sidebar,
     load_pii,
@@ -9,7 +10,7 @@ from utils.ui.data import (
     latest,
 )
 
-st.set_page_config(page_title="AI Eval - PII", layout="wide")
+inject_theme()
 st.title("PII Analysis")
 st.caption("Evaluate the presence and handling of personal identifiable information (PII) across iterations.")
 

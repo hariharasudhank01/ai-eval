@@ -1,6 +1,7 @@
 import altair as alt
 import pandas as pd
 import streamlit as st
+from utils.ui.theme import inject_theme
 from utils.ui.data import (
     select_gen_id_sidebar,
     load_distribution_drift,
@@ -8,7 +9,7 @@ from utils.ui.data import (
     kpi_card,
 )
 
-st.set_page_config(page_title="AI Eval - Distribution", layout="wide")
+inject_theme()
 st.title("Distribution Analysis")
 st.caption("Compare data distribution across iterations to identify shifts, bias amplification, or loss of minority representation.")
 

@@ -1,8 +1,9 @@
 import pandas as pd
 import streamlit as st
+from utils.ui.theme import inject_theme
 from utils.ui.data import select_gen_id_sidebar, load_pii_findings, load_toxicity_findings
 
-st.set_page_config(page_title="AI Eval - Evidence", layout="wide")
+inject_theme()
 st.title("Evidence")
 st.caption("View detailed evidence for flagged findings across all evaluation dimensions.")
 

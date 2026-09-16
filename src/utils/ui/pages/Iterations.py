@@ -1,6 +1,7 @@
 import altair as alt
 import pandas as pd
 import streamlit as st
+from utils.ui.theme import inject_theme
 from utils.ui.data import (
     select_gen_id_sidebar,
     load_model_collapse,
@@ -9,7 +10,7 @@ from utils.ui.data import (
     kpi_card,
 )
 
-st.set_page_config(page_title="AI Eval - Iterations", layout="wide")
+inject_theme()
 st.title("Iteration Analysis")
 st.caption("Compare evaluation results for a selected iteration against its relevant baseline or previous iteration.")
 
@@ -69,7 +70,7 @@ with right:
         st.markdown(f"- {label}")
     if st.button("View Detailed Evidence →"):
         st.session_state["evidence_step_filter"] = selected_step
-        st.switch_page("pages/5_Evidence.py")
+        st.switch_page("pages/evidence.py")
 
 st.divider()
 st.subheader("Metric Trend Across Iterations")
