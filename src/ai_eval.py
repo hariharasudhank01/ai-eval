@@ -2,8 +2,9 @@
 This Script will be the entry point for this project
 """
 import argparse
+import os
 from utils import eval
-from utils.helpers.logger import get_logger, timed
+from utils.helpers.logger import get_logger, timed, LOG_DIR
 import sys
 
 from utils.helpers import validater
@@ -54,8 +55,8 @@ def argparser():
     parser.add_argument(
         "-o", "--output",
         type=str,
-        help="Path to store output file",
-        required=True
+        help="Path to store output file (default: the project's output/ dir, same as the API uses)",
+        default=LOG_DIR + os.sep
     )
     
     return parser.parse_args()

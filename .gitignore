@@ -12,3 +12,7 @@ src/utils/api/__pycache__
 src/.env
 test/
 .DS_Store
+src/utils/ui/__pycache__
+src/utils/llm/providers/__pycache__
+src/output/
+src/.streamlit/

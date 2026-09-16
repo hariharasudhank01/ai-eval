@@ -11,6 +11,7 @@ src/utils/test_scenarios/.env
 src/utils/report/.streamlit/
 src/utils/helpers/__pycache__
 src/utils/api/__pycache__
+src/.streamlit/secrets.toml
 src/.env
 test/
 .DS_Store

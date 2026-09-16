@@ -92,6 +92,25 @@ services:
       ai-eval-ollama:
         condition: service_healthy
 
+  ai-eval-frontend:
+    container_name: ai-eval-frontend
+    build:
+      context: ..
+      dockerfile: src/Dockerfile
+    restart: always
+    command: ["streamlit", "run", "utils/ui/home.py", "--server.address=0.0.0.0", "--server.port=8501"]
+    ports:
+      - 8501:8501
+    volumes:
+      - ../output:/app/output
+    networks:
+      - ai-eval-db-network
+    depends_on:
+      ai-eval-db-service:
+        condition: service_started
+      ai-eval-api:
+        condition: service_started
+
 networks:
   ai-eval-db-network:
 volumes:
